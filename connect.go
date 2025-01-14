@@ -4,7 +4,7 @@ import (
   	"gorm.io/driver/mysql" 
   	"gorm.io/gorm"
 	"github.com/gin-gonic/gin"
-	//"github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 //構造体Userの宣言
@@ -54,8 +54,21 @@ func login(c*gin.Context){
 		c.JSON(500,gin.H{"error":result.Error.Error()})
 		return
 	}
+	//JWTの発行
+	var (
+		key []byte
+		t   *jwt.Token
+		s   string
+		err error
+	)
+	t = jwt.New(jwt.SigningMethodHS256) 
+	s, err = t.SignedString(key) 
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
 	//成功した際に送信
-	c.JSON(200,gin.H{"message":"ログインに成功しました"})
+	c.JSON(200,gin.H{"message":"ログインに成功しました" "JWT":s})
 }
 
 //所持しているクレジットを表示
