@@ -1,47 +1,54 @@
 package main
 
 import (
-  	"gorm.io/driver/sqlite" // Sqlite driver based on CGO
-  	// "github.com/glebarez/sqlite" // Pure go SQLite driver, checkout https://github.com/glebarez/sqlite for details
+  	"gorm.io/driver/mysql" 
   	"gorm.io/gorm"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
+	//"github.com/golang-jwt/jwt/v5"
 )
 
-//構造体User_tableの宣言
-type User_table struct{
+//構造体Userの宣言
+type User struct{
+	ID			uint	`json:"id" gorm:"primaryKey"`
 	USERNAME	string	`json:"username"`
 	PASSWORD	string	`json:"password"`
+	CREDIT		uint	`json:"credit"`
 }
+
 
 var db *gorm.DB
 
-func main(){
-	//POSTを受け取る
-	router:=gin.Default()
-	router.POST("/somePost",posting)
-	router.GET("/someGet",getting)
-	router.PATCH("/somePatch",patching)
-	router.Run(":8080")
+func (User) TableName() string {
+    return "usertable"
 }
 
-func posting(c*gin.Context){
+func main(){
 	var err error
-	// github.com/mattn/go-sqlite3
-	//SQLiteを開く
-	db, err := gorm.Open(sqlite.Open("usertable.db"), &gorm.Config{})
-	//つながらないとエラー返す
+	dsn := "root:7gh342Fio-55aLNS@tcp(127.0.0.1:3306)/usertable?charset=utf8mb4&parseTime=True&loc=Local"
+  	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		panic("failed to connect to database")
 	}
-	var img User_table
+	router:=gin.Default()
+	router.POST("/login",login)
+	router.GET("/credit",getcredit)
+	router.POST("/register",register)
+	router.Run(":8080")
+}
+
+//ログインを行う
+//1.送信されたユーザー名とパスワードを確認
+//2.一致すればJWTを発行
+//3.メッセージの返答
+func login(c*gin.Context){
+	var user User
 	//構造に合わなければエラー返す
-	if err := c.BindJSON(&img); err != nil {
+	if err := c.BindJSON(&user); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 	//挿入
-	result := db.Create(&img) // pass pointer of data to Create
+	result := db.Where("username = ? AND password = ?", user.USERNAME, user.PASSWORD).Take(&user) 
 	//できなければエラー返す
 	if result.Error != nil{
 		c.JSON(500,gin.H{"error":result.Error.Error()})
@@ -51,52 +58,44 @@ func posting(c*gin.Context){
 	c.JSON(200,gin.H{"message":"ログインに成功しました"})
 }
 
-func getting(c*gin.Context){
-	var err error
-	// github.com/mattn/go-sqlite3
-	//SQLiteを開く
-	db, err := gorm.Open(sqlite.Open("usertable.db"), &gorm.Config{})
-	//つながらないとエラー返す
-	if err != nil {
-		panic("failed to connect to database")
-	}
-	var img User_table
+//所持しているクレジットを表示
+//1.ログインしているかJWTで確認
+//2.ログインしているならば所持しているクレジットを表示
+//3.メッセージの返答
+func getcredit(c*gin.Context){
+	var credit User
 	//構造に合わなければエラー返す
-	if err := c.BindJSON(&img); err != nil {
+	if err := c.BindJSON(&credit); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	//挿入
-	result := db.Create(&img) // pass pointer of data to Create
+
+	//クレジットを取得
+	var wantuser User
+	result := db.Where("username = ?", credit.USERNAME).First(&wantuser)
 	//できなければエラー返す
-	if result.Error != nil{
-		c.JSON(500,gin.H{"error":result.Error.Error()})
+	if result.Error != nil {
+		c.JSON(500, gin.H{"error": result.Error.Error()})
 		return
 	}
+	c.JSON(200, gin.H{"credit": wantuser.CREDIT})
+
 	//成功した際に送信
 	c.JSON(200,gin.H{"message":"所持しているクレジットを表示します"})
 }
 
 //ユーザー登録
-//1.ユーザーが既に登録されているか.
-//2.1を満たさなければユーザーを登録する
+//1.送信されたユーザー名が登録されていないか確認
+//2.登録されていなければユーザーとパスワードを登録する
 //3.メッセージの返答
-func patching(c*gin.Context){
-	var err error
-	// github.com/mattn/go-sqlite3
-	//SQLiteを開く
-	db, err := gorm.Open(sqlite.Open("usertable.db"), &gorm.Config{})
-	//つながらないとエラー返す
-	if err != nil {
-		panic("failed to connect to database")
-	}
+func register(c*gin.Context){
 
 	//1.既に登録されているか
-	var newname USERNAME
-	readresult := db.First(&newname, "username = ?", usertable.USERNAME)
+	var newname User
+	readresult := db.First(&newname, "username = ?", newname.USERNAME)
 	
-	if readresult.Error := nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if readresult.Error != nil {
+		c.JSON(400, gin.H{"error": readresult.Error.Error()})
 		return
 	}
 
@@ -106,12 +105,20 @@ func patching(c*gin.Context){
 		return
 	}
 	//2.登録
-	createresult := db.Create(&newname) // pass pointer of data to Create
+
+	newUser := User{
+		USERNAME: newname.USERNAME,
+		PASSWORD: newname.PASSWORD,
+		CREDIT: 100,
+	}
+
+	result := db.Create(&newUser) 
+
 	//できなければエラー返す
-	if createresult.Error != nil{
-		c.JSON(500,gin.H{"error":登録に失敗しました})
+	if result.Error != nil{
+		c.JSON(500,gin.H{"error":"登録に失敗しました"})
 		return
 	}
 	//成功した際に送信
-	c.JSON(200,gin.H{"message":"ユーザー登録に成功しました."})
+	c.JSON(200,gin.H{"message":"ユーザー登録に成功しました.記念として100クレジットをプレゼントします"})
 }
