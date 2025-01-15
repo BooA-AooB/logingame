@@ -13,6 +13,7 @@ type User struct{
 	USERNAME	string	`json:"username"`
 	PASSWORD	string	`json:"password"`
 	CREDIT		uint	`json:"credit"`
+	JWT			string	`json:"jwt"`
 }
 
 
@@ -85,16 +86,16 @@ func getcredit(c*gin.Context){
 
 	//クレジットを取得
 	var wantuser User
+	//ユーザー名とパスワードの確認(未)
 	result := db.Where("username = ?", credit.USERNAME).First(&wantuser)
 	//できなければエラー返す
 	if result.Error != nil {
 		c.JSON(500, gin.H{"error": result.Error.Error()})
 		return
 	}
-	c.JSON(200, gin.H{"credit": wantuser.CREDIT})
 
 	//成功した際に送信
-	c.JSON(200,gin.H{"message":"所持しているクレジットを表示します"})
+	c.JSON(200,gin.H{"message":"所持しているクレジットを表示します \nwantuser.CREDIT"})
 }
 
 //ユーザー登録
